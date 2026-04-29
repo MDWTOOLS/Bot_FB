@@ -124,6 +124,11 @@ def load_comments():
         return [c.strip() for c in raw.split("---") if c.strip()]
     return [c.strip() for c in raw.split("\n") if c.strip()]
 
+def save_comments(comments_list):
+    p = os.path.join(APP_DIR, "comments.txt")
+    with open(p, "w", encoding="utf-8") as f:
+        f.write("\n---\n".join(comments_list) + "\n")
+
 def load_set(path):
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -990,11 +995,18 @@ textarea.cookie-input{min-height:90px;resize:vertical;font-size:.72rem;font-fami
 .sse-badge{position:fixed;bottom:6px;right:6px;font-size:.55rem;padding:2px 7px;border-radius:5px;font-weight:600;z-index:99}
 .sse-on{background:rgba(35,134,54,.7);color:#fff}
 .sse-off{background:rgba(248,81,73,.7);color:#fff}
+.gear-wrap{position:relative}.gear-btn{width:36px;height:36px;border-radius:50%;background:#161b22;border:1px solid #30363d;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;color:#484f58}.gear-btn:hover{background:#21262d;border-color:#58a6ff;color:#58a6ff}.gear-btn svg{width:18px;height:18px;fill:currentColor}.gear-menu{position:absolute;right:0;top:42px;background:#161b22;border:1px solid #30363d;border-radius:10px;min-width:180px;z-index:50;display:none;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.4)}.gear-menu.open{display:block}.gear-menu a{display:flex;align-items:center;gap:10px;padding:10px 14px;color:#c9d1d9;text-decoration:none;font-size:.78rem;font-weight:500;transition:all .15s;border-bottom:1px solid #21262d}.gear-menu a:last-child{border-bottom:none}.gear-menu a:hover{background:#0d419a;color:#fff}.gear-menu a svg{width:16px;height:16px;fill:currentColor;flex-shrink:0}.gear-menu a .lbl{flex:1}.gear-menu a .badge{background:#21262d;padding:1px 8px;border-radius:8px;font-size:.6rem;color:#484f58}
 </style></head><body>
 <div class="wrap">
 <div class="hdr">
   <div><h1>Bot Facebook</h1><div class="sub">Create by MDW</div></div>
-  <a href="/notes" class="gear-btn" title="Note Activations"><svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg></a>
+  <div class="gear-wrap">
+    <div class="gear-btn" onclick="toggleMenu()" title="Menu"><svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92-3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg></div>
+    <div class="gear-menu" id="gearMenu">
+      <a href="/notes"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg><span class="lbl">Note Activations</span><span class="badge" id="menuNotesBadge">0</span></a>
+      <a href="/comments"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg><span class="lbl">Comments</span><span class="badge" id="menuCommentsBadge">0</span></a>
+    </div>
+  </div>
 </div>
 <div class="acct-bar">
   <div class="acct-avatar" id="acctAvatar">?</div>
@@ -1093,7 +1105,7 @@ function stopLive(){if(!liveActive)return;document.getElementById("liveImg").src
 function renderLogs(logs){if(!logs||!logs.length)return;var box=document.getElementById("logBox");var wasAtBottom=box.scrollTop+box.clientHeight>=box.scrollHeight-30;var html="";var last=Math.max(0,logs.length-200);for(var i=last;i<logs.length;i++){var line=logs[i];var c="li";if(line.indexOf("[SUCCESS]")>-1)c="ls";else if(line.indexOf("[FAILED]")>-1)c="lf";else if(line.indexOf("[BLOCKED]")>-1)c="lb";else if(line.indexOf("[WARNING]")>-1)c="lw";else if(line.indexOf("[ERROR]")>-1)c="le";else if(line.indexOf("[BOT]")>-1)c="lbot";else if(line.indexOf("[RC]")>-1)c="lrc";else if(line.indexOf("[SCRAPE]")>-1)c="lsc";else if(line.indexOf("[COOKIE]")>-1)c="lck";var s=line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");html+='<div class="'+c+'">'+s+"</div>"}box.innerHTML=html;if(wasAtBottom)box.scrollTop=box.scrollHeight}
 function logScrollTop(){document.getElementById("logBox").scrollTop=0}
 function logScrollBottom(){var b=document.getElementById("logBox");b.scrollTop=b.scrollHeight}
-function update(d){if(!d)return;document.getElementById("sO").textContent=d.ok;document.getElementById("sF").textContent=d.fail;document.getElementById("sB").textContent=d.blocked;if(d.name&&d.name!=="N/A"){document.getElementById("acctAvatar").textContent=d.name.charAt(0).toUpperCase();document.getElementById("acctName").textContent=d.name}else{document.getElementById("acctAvatar").textContent="?";document.getElementById("acctName").textContent="Belum login"}var dot=document.getElementById("statusDot");dot.className="status-dot sd-"+d.phase.toLowerCase();document.getElementById("statusTxt").textContent=d.msg||d.phase;var eb=document.getElementById("errBox");if(d.err){eb.textContent=d.err;eb.classList.remove("hid")}else{eb.classList.add("hid")}var sh=function(id){document.getElementById(id).classList.remove("hid")};var hi=function(id){document.getElementById(id).classList.add("hid")};if(d.phase==="IDLE"){sh("cookieCard");hi("controlCard");document.getElementById("loginMsg").classList.add("hid")}else if(d.phase==="LOGIN"){sh("cookieCard");hi("controlCard");var lm=document.getElementById("loginMsg");lm.textContent="Memverifikasi...";lm.className="msg msg-e";lm.classList.remove("hid");document.getElementById("btnLogin").disabled=true}else if(d.phase==="READY"){hi("cookieCard");sh("controlCard");document.getElementById("btnStart").disabled=false;document.getElementById("btnStart").innerHTML='<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor"><path d="M8 5v14l11-7z"/></svg> Start Auto Comment';document.getElementById("btnStop").disabled=true}else if(d.phase==="RUNNING"){hi("cookieCard");sh("controlCard");document.getElementById("btnStart").disabled=true;document.getElementById("btnStart").innerHTML='<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Bot Berjalan...';document.getElementById("btnStop").disabled=false}var cD=document.getElementById("consoleDot");var lT=document.getElementById("liveTag");var lO=document.getElementById("liveOff");if(d.phase==="READY"||d.phase==="RUNNING"||d.phase==="LOGIN"){cD.classList.remove("off");lO.classList.add("hid");lT.classList.remove("hid")}else{cD.classList.add("off");lO.classList.remove("hid");lT.classList.add("hid")}renderLogs(d.logs)}
+function update(d){if(!d)return;document.getElementById("sO").textContent=d.ok;document.getElementById("sF").textContent=d.fail;document.getElementById("sB").textContent=d.blocked;var mnb=document.getElementById("menuNotesBadge");if(mnb)mnb.textContent=(d.ok||0)+(d.blocked||0);var mcb=document.getElementById("menuCommentsBadge");if(mcb)mcb.textContent="";if(d.name&&d.name!=="N/A"){document.getElementById("acctAvatar").textContent=d.name.charAt(0).toUpperCase();document.getElementById("acctName").textContent=d.name}else{document.getElementById("acctAvatar").textContent="?";document.getElementById("acctName").textContent="Belum login"}var dot=document.getElementById("statusDot");dot.className="status-dot sd-"+d.phase.toLowerCase();document.getElementById("statusTxt").textContent=d.msg||d.phase;var eb=document.getElementById("errBox");if(d.err){eb.textContent=d.err;eb.classList.remove("hid")}else{eb.classList.add("hid")}var sh=function(id){document.getElementById(id).classList.remove("hid")};var hi=function(id){document.getElementById(id).classList.add("hid")};if(d.phase==="IDLE"){sh("cookieCard");hi("controlCard");document.getElementById("loginMsg").classList.add("hid")}else if(d.phase==="LOGIN"){sh("cookieCard");hi("controlCard");var lm=document.getElementById("loginMsg");lm.textContent="Memverifikasi...";lm.className="msg msg-e";lm.classList.remove("hid");document.getElementById("btnLogin").disabled=true}else if(d.phase==="READY"){hi("cookieCard");sh("controlCard");document.getElementById("btnStart").disabled=false;document.getElementById("btnStart").innerHTML='<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor"><path d="M8 5v14l11-7z"/></svg> Start Auto Comment';document.getElementById("btnStop").disabled=true}else if(d.phase==="RUNNING"){hi("cookieCard");sh("controlCard");document.getElementById("btnStart").disabled=true;document.getElementById("btnStart").innerHTML='<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Bot Berjalan...';document.getElementById("btnStop").disabled=false}var cD=document.getElementById("consoleDot");var lT=document.getElementById("liveTag");var lO=document.getElementById("liveOff");if(d.phase==="READY"||d.phase==="RUNNING"||d.phase==="LOGIN"){cD.classList.remove("off");lO.classList.add("hid");lT.classList.remove("hid")}else{cD.classList.add("off");lO.classList.remove("hid");lT.classList.add("hid")}renderLogs(d.logs)}
 function doLogin(){var c=document.getElementById("inCookie").value.trim();if(!c){alert("Paste cookie Facebook terlebih dahulu!");return}var b=document.getElementById("btnLogin");b.disabled=true;b.textContent="Memverifikasi...";api("/api/load-cookie","POST",{cookie:c}).then(function(d){update(d);b.disabled=false;b.textContent="Load Cookie & Login"})}
 function startBot(){document.getElementById("btnStart").disabled=true;api("/api/bot-start","POST")}
 function stopBot(){api("/api/bot-stop","POST")}
@@ -1102,6 +1114,7 @@ function onLiveClick(ev){var r=ev.currentTarget.getBoundingClientRect();var x=((
 function rcSend(){var t=document.getElementById("rcInput").value;if(!t)return;api("/api/rc/type","POST",{text:t});document.getElementById("rcInput").value=""}
 function rcKey(k){api("/api/rc/key","POST",{key:k})}
 function rcScroll(d){api("/api/rc/scroll","POST",{direction:d})}
+function toggleMenu(){var m=document.getElementById("gearMenu");m.classList.toggle("open")}document.addEventListener("click",function(e){var w=document.querySelector(".gear-wrap");if(w&&!w.contains(e.target)){document.getElementById("gearMenu").classList.remove("open")}});
 document.getElementById("rcInput").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();rcSend()}});
 (function(){var sE=document.getElementById("sseBadge");var es=null;var r=0;function c(){if(es){es.close();es=null}es=new EventSource("/api/stream");es.onopen=function(){r=0;sE.textContent="SSE Live";sE.className="sse-badge sse-on"};es.onmessage=function(e){try{update(JSON.parse(e.data))}catch(er){}};es.onerror=function(){sE.textContent="...";sE.className="sse-badge sse-off";es.close();es=null;r++;setTimeout(c,Math.min(r*2,10)*1000)}}api("/api/status").then(function(d){update(d);c()});window.addEventListener("beforeunload",function(){if(es)es.close()})})();
 </script></body></html>"""
@@ -1241,6 +1254,141 @@ setInterval(loadData,5000);
 </script></body></html>"""
 
 # ===========================================================
+#  HTML TEMPLATE - COMMENTS PAGE (Manage Comments)
+# ===========================================================
+HTML_COMMENTS = """<!DOCTYPE html>
+<html lang="id"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Manage Comments - Bot Facebook</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
+.wrap{max-width:520px;margin:0 auto;padding:12px 10px}
+.top-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.back-btn{width:36px;height:36px;border-radius:50%;background:#161b22;border:1px solid #30363d;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;color:#c9d1d9;text-decoration:none}
+.back-btn:hover{background:#21262d;border-color:#58a6ff;color:#58a6ff}
+.back-btn svg{width:18px;height:18px;fill:currentColor}
+.page-title{flex:1}
+.page-title h1{font-size:1rem;color:#58a6ff;font-weight:700;letter-spacing:.5px}
+.page-title .sub{color:#484f58;font-size:.6rem;margin-top:1px}
+.add-bar{display:flex;gap:6px;margin-bottom:10px}
+.add-bar textarea{flex:1;min-height:44px;max-height:120px;padding:8px 10px;background:#0d1117;border:1px solid #30363d;border-radius:8px;color:#e6edf3;font-size:.8rem;outline:none;font-family:inherit;resize:vertical}
+.add-bar textarea:focus{border-color:#58a6ff}
+.btn{padding:10px 18px;border:none;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+.btn svg{width:16px;height:16px;fill:currentColor}
+.btn-go{background:#238636;color:#fff}.btn-go:hover{background:#2ea043}
+.btn-sm{padding:6px 12px;font-size:.75rem}
+.btn-del{background:transparent;color:#f85149;border:1px solid #30363d;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:.7rem;font-weight:600;transition:all .15s}
+.btn-del:hover{background:#3d1114;border-color:#f85149}
+.btn-edit{background:transparent;color:#58a6ff;border:1px solid #30363d;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:.7rem;font-weight:600;transition:all .15s}
+.btn-edit:hover{background:#0d419a22;border-color:#58a6ff}
+.comment-list{display:flex;flex-direction:column;gap:6px}
+.comment-item{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:10px 12px;transition:all .2s}
+.comment-item:hover{border-color:#484f58}
+.comment-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.comment-num{font-size:.65rem;color:#484f58;font-weight:600;background:#0d1117;padding:2px 8px;border-radius:6px}
+.comment-actions{display:flex;gap:4px}
+.comment-text{font-size:.82rem;color:#e6edf3;line-height:1.5;word-break:break-word;white-space:pre-wrap}
+.comment-text.editing{display:none}
+.edit-box{display:none}
+.edit-box textarea{width:100%;min-height:60px;max-height:150px;padding:8px 10px;background:#0d1117;border:1px solid #58a6ff;border-radius:8px;color:#e6edf3;font-size:.82rem;outline:none;font-family:inherit;resize:vertical;margin-bottom:6px}
+.edit-box textarea:focus{border-color:#58a6ff}
+.edit-actions{display:flex;gap:6px;justify-content:flex-end}
+.btn-save{background:#238636;color:#fff;padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-size:.75rem;font-weight:600;transition:all .15s}
+.btn-save:hover{background:#2ea043}
+.btn-cancel{background:#21262d;color:#c9d1d9;border:1px solid #30363d;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.75rem;font-weight:600;transition:all .15s}
+.btn-cancel:hover{background:#30363d}
+.total-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 0;margin-bottom:8px;border-bottom:1px solid #21262d}
+.total-bar .lbl{font-size:.7rem;color:#484f58}
+.total-bar .num{font-size:.9rem;font-weight:700;color:#58a6ff}
+.empty-state{display:flex;flex-direction:column;align-items:center;padding:40px 20px;color:#30363d;gap:8px;text-align:center}
+.empty-state svg{width:40px;height:40px;fill:#21262d}
+.empty-state .txt{font-size:.78rem}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#238636;color:#fff;padding:8px 18px;border-radius:8px;font-size:.78rem;font-weight:600;z-index:99;transition:transform .3s;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.err{background:#da3633}
+</style></head><body>
+<div class="wrap">
+<div class="top-bar">
+  <a href="/" class="back-btn" title="Kembali"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></a>
+  <div class="page-title"><h1>MANAGE COMMENTS</h1><div class="sub">Bot Facebook &middot; Create by MDW</div></div>
+</div>
+<div class="total-bar"><span class="lbl">Total Comments</span><span class="num" id="totalCount">0</span></div>
+<div class="add-bar">
+  <textarea id="newComment" placeholder="Tulis komentar baru..."></textarea>
+  <button class="btn btn-go" onclick="addComment()"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg> Add</button>
+</div>
+<div class="comment-list" id="commentList">
+  <div class="empty-state"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg><span class="txt">Belum ada komentar</span></div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+var comments=[];
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function toast(msg,isErr){var t=document.getElementById('toast');t.textContent=msg;t.className=isErr?'toast err show':'toast show';setTimeout(function(){t.className='toast'},2000)}
+function renderList(){
+  var box=document.getElementById('commentList');
+  var total=document.getElementById('totalCount');
+  total.textContent=comments.length;
+  if(!comments.length){box.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg><span class="txt">Belum ada komentar</span></div>';return}
+  var html='';
+  for(var i=0;i<comments.length;i++){
+    html+='<div class="comment-item" id="item'+i+'">';
+    html+='<div class="comment-header"><span class="comment-num">#'+(i+1)+'</span><div class="comment-actions">';
+    html+='<button class="btn-edit" onclick="editComment('+i+')">Edit</button>';
+    html+='<button class="btn-del" onclick="deleteComment('+i+')">Delete</button>';
+    html+='</div></div>';
+    html+='<div class="comment-text" id="text'+i+'">'+esc(comments[i])+'</div>';
+    html+='<div class="edit-box" id="editBox'+i+'"><textarea id="editInput'+i+'">'+esc(comments[i])+'</textarea>';
+    html+='<div class="edit-actions"><button class="btn-cancel" onclick="cancelEdit('+i+')">Cancel</button><button class="btn-save" onclick="saveEdit('+i+')">Save</button></div></div>';
+    html+='</div>';
+  }
+  box.innerHTML=html;
+}
+function addComment(){
+  var ta=document.getElementById('newComment');
+  var txt=ta.value.trim();
+  if(!txt){toast('Tulis komentar dulu!',true);return}
+  fetch('/api/comments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt})})
+  .then(function(r){return r.json()})
+  .then(function(d){if(d&&d.ok){ta.value='';loadComments();toast('Komentar ditambahkan!')}else{toast('Gagal menambahkan!',true)}})
+  .catch(function(){toast('Error!',true)});
+}
+function deleteComment(idx){
+  if(!confirm('Hapus komentar #'+(idx+1)+'?'))return;
+  fetch('/api/comments/'+idx,{method:'DELETE'})
+  .then(function(r){return r.json()})
+  .then(function(d){if(d&&d.ok){loadComments();toast('Komentar dihapus!')}else{toast('Gagal menghapus!',true)}})
+  .catch(function(){toast('Error!',true)});
+}
+function editComment(idx){
+  document.getElementById('text'+idx).style.display='none';
+  document.getElementById('editBox'+idx).style.display='block';
+  document.getElementById('editInput'+idx).focus();
+}
+function cancelEdit(idx){
+  document.getElementById('text'+idx).style.display='';
+  document.getElementById('editBox'+idx).style.display='none';
+}
+function saveEdit(idx){
+  var txt=document.getElementById('editInput'+idx).value.trim();
+  if(!txt){toast('Komentar tidak boleh kosong!',true);return}
+  fetch('/api/comments/'+idx,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt})})
+  .then(function(r){return r.json()})
+  .then(function(d){if(d&&d.ok){loadComments();toast('Komentar diperbarui!')}else{toast('Gagal update!',true)}})
+  .catch(function(){toast('Error!',true)});
+}
+function loadComments(){
+  fetch('/api/comments').then(function(r){return r.json()}).then(function(d){
+    if(d&&d.comments){comments=d.comments;renderList()}
+  }).catch(function(){});
+}
+document.getElementById('newComment').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();addComment()}});
+loadComments();
+</script></body></html>"""
+
+# ===========================================================
 #  FLASK APP
 # ===========================================================
 app = Flask(__name__)
@@ -1255,6 +1403,51 @@ def index():
 @app.route("/notes")
 def notes_page():
     return render_template_string(HTML_NOTES)
+
+@app.route("/comments")
+def comments_page():
+    return render_template_string(HTML_COMMENTS)
+
+@app.route("/api/comments")
+def api_get_comments():
+    try:
+        c = load_comments()
+        return jsonify({"comments": c, "total": len(c)})
+    except Exception as e:
+        return jsonify({"comments": [], "total": 0, "error": str(e)})
+
+@app.route("/api/comments", methods=["POST"])
+def api_add_comment():
+    d = request.get_json()
+    txt = (d.get("text") or "").strip()
+    if not txt:
+        return jsonify({"ok": False, "error": "empty"}), 400
+    comments = load_comments()
+    comments.append(txt)
+    save_comments(comments)
+    return jsonify({"ok": True, "total": len(comments)})
+
+@app.route("/api/comments/<int:idx>", methods=["PUT"])
+def api_edit_comment(idx):
+    d = request.get_json()
+    txt = (d.get("text") or "").strip()
+    if not txt:
+        return jsonify({"ok": False, "error": "empty"}), 400
+    comments = load_comments()
+    if idx < 0 or idx >= len(comments):
+        return jsonify({"ok": False, "error": "invalid index"}), 400
+    comments[idx] = txt
+    save_comments(comments)
+    return jsonify({"ok": True, "total": len(comments)})
+
+@app.route("/api/comments/<int:idx>", methods=["DELETE"])
+def api_delete_comment(idx):
+    comments = load_comments()
+    if idx < 0 or idx >= len(comments):
+        return jsonify({"ok": False, "error": "invalid index"}), 400
+    comments.pop(idx)
+    save_comments(comments)
+    return jsonify({"ok": True, "total": len(comments)})
 
 @app.route("/api/status")
 def api_status():
