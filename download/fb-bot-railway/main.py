@@ -596,9 +596,15 @@ def playwright_thread_func():
     def launch_browser():
         nonlocal ctx, page
         os.makedirs(BROWSER_DATA, exist_ok=True)
+        # Use system Chromium on Railway/Docker, or Playwright bundled on local
+        exec_path = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH", "")
+        kw = {}
+        if exec_path and os.path.exists(exec_path):
+            kw["executable_path"] = exec_path
+            slog(f"Menggunakan system Chromium: {exec_path}", "BROWSER")
         ctx = pw.chromium.launch_persistent_context(
             BROWSER_DATA, headless=True, args=bargs,
-            viewport=LIVE_VIEWPORT, user_agent=ua, locale="id-ID")
+            viewport=LIVE_VIEWPORT, user_agent=ua, locale="id-ID", **kw)
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         _page_ref = page
 
