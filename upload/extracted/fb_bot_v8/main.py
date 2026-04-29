@@ -16,6 +16,9 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 # ===========================================================
 #  CONFIG
 # ===========================================================
+# Auto-read cookie from terminal environment variable
+ENV_COOKIE = os.environ.get("FB", "").strip()
+
 DIR = os.path.dirname(os.path.abspath(__file__))
 BROWSER_DATA = os.path.join(DIR, "browser_data")
 WEB_PORT = int(os.environ.get("PORT", "8080"))
@@ -148,6 +151,31 @@ def check_login(page):
         cn = [c["name"] for c in cookies]
         if "c_user" in cn and "xs" in cn and "login" not in curl:
             return True
+    except:
+        pass
+    return False
+
+def click_home_button(page):
+    """Click Facebook Home button to refresh feed without reload (keeps cookie alive)."""
+    selectors = [
+        'a[href="/"], a[href="https://www.facebook.com/"]',
+        'a[aria-label="Home"]', 'a[aria-label="Beranda"]',
+        'div[role="navigation"] a[href="/"]',
+        'span[data-pagelet="LeftNav"] a[href="/"]',
+    ]
+    for sel in selectors:
+        try:
+            els = page.query_selector_all(sel)
+            for el in els:
+                if el.is_visible():
+                    el.click()
+                    return True
+        except:
+            pass
+    # Fallback: navigate via URL (soft)
+    try:
+        page.evaluate("window.location.href = '/'")
+        return True
     except:
         pass
     return False
@@ -422,6 +450,12 @@ def playwright_thread_func():
 
     while True:
         try:
+            # Auto-load cookie from env variable FB if available
+            if ENV_COOKIE and sget("phase") == "IDLE" and not ctx:
+                pr(f"  {C.Y}Cookie ditemukan dari env FB, memuat otomatis...{C.R}")
+                cmd_put("load_cookie", {"cookie": ENV_COOKIE})
+                time.sleep(1)
+
             # Process ALL commands from queue
             while True:
                 try:
@@ -432,6 +466,9 @@ def playwright_thread_func():
                 # ---- LOAD COOKIE ----
                 if action == "load_cookie":
                     cookie_str = (data or {}).get("cookie", "")
+                    # Prioritize env variable if available
+                    if not cookie_str and ENV_COOKIE:
+                        cookie_str = ENV_COOKIE
                     try:
                         if not cookie_str.strip():
                             sset("err", "Cookie kosong!")
@@ -686,10 +723,10 @@ def playwright_thread_func():
                                 sset("msg", f"Scrolling... Total komentari: {total_commented}")
                                 time.sleep(3)
 
-                                # If no new posts found for 10 consecutive scrolls, try reloading
+                                # If no new posts found for 10 consecutive scrolls, click Home button to refresh
                                 if no_new_count >= 10:
-                                    slog("Tidak ada post baru setelah 10 scroll, reload halaman...", "BOT")
-                                    page.reload(timeout=30000, wait_until="domcontentloaded")
+                                    slog("Tidak ada post baru setelah 10 scroll, klik Home button...", "BOT")
+                                    click_home_button(page)
                                     time.sleep(4)
                                     dismiss_dialogs(page)
                                     no_new_count = 0
