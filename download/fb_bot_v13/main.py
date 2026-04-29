@@ -83,9 +83,9 @@ def slog(msg, tag="INFO"):
     ts = datetime.datetime.now().strftime("%H:%M:%S")
     e = f"[{ts}] [{tag}] {msg}"
     with S_lock:
-        S["logs"].insert(0, e)
-        if len(S["logs"]) > 60:
-            S["logs"] = S["logs"][:60]
+        S["logs"].append(e)
+        if len(S["logs"]) > 200:
+            S["logs"] = S["logs"][-200:]
     pr(f"  {C.GR}{e}{C.R}")
 
 def get_sd():
@@ -882,373 +882,210 @@ def playwright_thread_func():
             time.sleep(1)
 
 # ===========================================================
-#  HTML TEMPLATE (SSE-based, NO polling)
+#  HTML TEMPLATE (Tabbed UI: Start | Log | Console)
 # ===========================================================
 HTML = """<!DOCTYPE html>
 <html lang="id"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FB Bot v13 - Lightweight Live</title>
+<title>FB Bot v13</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
-.wrap{max-width:900px;margin:0 auto;padding:12px}
-h1{font-size:1.3rem;color:#58a6ff;text-align:center;margin-bottom:2px}
-.sub{color:#8b949e;font-size:.75rem;text-align:center;margin-bottom:10px}
+.wrap{max-width:520px;margin:0 auto;padding:12px 10px}
+.hdr{text-align:center;margin-bottom:10px}
+.hdr h1{font-size:1.1rem;color:#58a6ff;margin-bottom:1px}
+.hdr .sub{color:#484f58;font-size:.68rem}
+.acct-bar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#161b22;border:1px solid #30363d;border-radius:10px;margin-bottom:8px}
+.acct-avatar{width:36px;height:36px;border-radius:50%;background:#21262d;border:2px solid #30363d;display:flex;align-items:center;justify-content:center;font-size:.9rem;color:#58a6ff;font-weight:700;flex-shrink:0}
+.acct-info{flex:1;min-width:0}
+.acct-name{font-size:.9rem;font-weight:600;color:#e6edf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-status{font-size:.7rem;color:#484f58;display:flex;align-items:center;gap:5px;margin-top:1px}
+.status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sd-idle{background:#484f58}.sd-login{background:#ffd33d}.sd-ready{background:#3fb950}.sd-running{background:#58a6ff;animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.err-line{font-size:.75rem;color:#f85149;padding:2px 12px 8px;margin-bottom:6px}
+.stats{display:flex;gap:5px;margin-bottom:8px}
+.st{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:6px 4px;text-align:center;flex:1}
+.st .n{font-size:1.2rem;font-weight:700}
+.st .l{font-size:.55rem;color:#484f58;text-transform:uppercase;margin-top:1px;letter-spacing:.3px}
+.s-ok .n{color:#3fb950}.s-fl .n{color:#f85149}.s-bk .n{color:#d29922}
+.tab-bar{display:flex;background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden;margin-bottom:8px}
+.tab-btn{flex:1;padding:10px 4px;text-align:center;font-size:.78rem;font-weight:600;color:#484f58;cursor:pointer;border:none;background:transparent;transition:all .2s;border-right:1px solid #30363d;display:flex;align-items:center;justify-content:center;gap:5px}
+.tab-btn:last-child{border-right:none}
+.tab-btn:hover{background:#1c2129;color:#c9d1d9}
+.tab-btn.active{background:#0d419a;color:#fff;box-shadow:inset 0 -2px 0 #58a6ff}
+.tab-btn svg{width:15px;height:15px;fill:currentColor;flex-shrink:0}
+.tab-dot{width:6px;height:6px;border-radius:50%;background:#f85149;animation:blink 1s infinite;flex-shrink:0}
+.tab-dot.off{background:#30363d;animation:none}
+.tab-panel{display:none}.tab-panel.active{display:block}
 .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;margin-bottom:8px}
-.card h2{font-size:.82rem;color:#c9d1d9;margin-bottom:6px}
-.badge{display:inline-block;padding:3px 10px;border-radius:16px;font-size:.72rem;font-weight:600}
-.b-idle{background:#30363d;color:#8b949e}
-.b-login{background:#9e6a03;color:#ffd33d}
-.b-ready{background:#238636;color:#3fb950}
-.b-running{background:#1f6feb;color:#58a6ff}
-.stats{display:flex;gap:6px;margin-bottom:8px}
-.stat{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:8px;text-align:center;flex:1}
-.stat .num{font-size:1.4rem;font-weight:700}
-.stat .lbl{font-size:.6rem;color:#8b949e;text-transform:uppercase;margin-top:2px}
-.stat-ok .num{color:#3fb950}
-.stat-fail .num{color:#f85149}
-.stat-bl .num{color:#d29922}
-input[type="text"],textarea{width:100%;padding:8px 10px;background:#0d1117;border:1px solid #30363d;border-radius:8px;color:#e6edf3;font-size:.82rem;margin-bottom:6px;outline:none;font-family:inherit}
-input:focus,textarea:focus{border-color:#58a6ff}
-label{display:block;font-size:.72rem;color:#8b949e;margin-bottom:2px}
-.btn{padding:9px 20px;border:none;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer;transition:all .15s}
+.card h2{font-size:.75rem;color:#484f58;margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.btn{padding:10px 18px;border:none;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn svg{width:16px;height:16px;fill:currentColor}
 .btn-go{background:#238636;color:#fff}.btn-go:hover{background:#2ea043}
-.btn-go:disabled{background:#1a3a1f;color:#3fb95080;cursor:not-allowed}
+.btn-go:disabled{background:#1a3a1f;color:#3fb95050;cursor:not-allowed}
 .btn-stop{background:#da3633;color:#fff}.btn-stop:hover{background:#f85149}
-.btn-stop:disabled{background:#3d1114;color:#f8514980;cursor:not-allowed}
-.btn-sec{background:#30363d;color:#e6edf3}.btn-sec:hover{background:#484f58}
-.row{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center}
-.msg{padding:6px 10px;border-radius:8px;font-size:.78rem;margin-bottom:6px}
+.btn-stop:disabled{background:#3d1114;color:#f8514950;cursor:not-allowed}
+.btn-sec{background:#21262d;color:#c9d1d9;border:1px solid #30363d}.btn-sec:hover{background:#30363d}
+.btn-full{width:100%;padding:12px;font-size:.9rem}
+.btn-sm{padding:7px 14px;font-size:.78rem}
+.row{display:flex;gap:6px;margin-top:8px}
+input[type="text"],textarea{width:100%;padding:9px 11px;background:#0d1117;border:1px solid #30363d;border-radius:8px;color:#e6edf3;font-size:.82rem;outline:none;font-family:inherit}
+input:focus,textarea:focus{border-color:#58a6ff}
+label{display:block;font-size:.68rem;color:#484f58;margin-bottom:3px;font-weight:600}
+.hint{color:#484f58;font-size:.62rem;margin-top:3px;line-height:1.4}
+.msg{padding:7px 10px;border-radius:8px;font-size:.78rem;margin-bottom:8px}
 .msg-e{background:#3d1114;color:#f85149;border:1px solid #da3633}
 .hid{display:none!important}
-.acct{color:#58a6ff;font-size:1rem;font-weight:600;text-align:center}
-.btn-full{width:100%;padding:12px;font-size:.95rem;letter-spacing:0.5px}
-.live-container{position:relative;width:100%;border-radius:8px;overflow:hidden;border:2px solid #30363d;background:#000;margin-bottom:6px;aspect-ratio:4/3}
-.live-container img{width:100%;height:100%;object-fit:contain;display:block}
+textarea.cookie-input{min-height:90px;resize:vertical;font-size:.72rem;font-family:'Cascadia Code',Consolas,monospace;line-height:1.4}
+.log-wrap{position:relative}
+.log-box{background:#010409;border:1px solid #21262d;border-radius:8px;padding:8px;height:420px;overflow-y:auto;font-family:'Cascadia Code',Consolas,monospace;font-size:.65rem;line-height:1.6;color:#484f58}
+.log-box::-webkit-scrollbar{width:6px}
+.log-box::-webkit-scrollbar-track{background:transparent}
+.log-box::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+.log-box::-webkit-scrollbar-thumb:hover{background:#484f58}
+.li{color:#484f58}.ls{color:#3fb950}.lf{color:#f85149}.lb{color:#d29922}.lw{color:#d29922}.le{color:#f85149}
+.lbot{color:#58a6ff}.lrc{color:#bc8cff}.lsc{color:#79c0ff}.lck{color:#f0883e}
+.log-scroll-bar{position:absolute;bottom:10px;right:10px;display:flex;gap:4px;z-index:5}
+.log-scroll-btn{width:32px;height:32px;border-radius:8px;background:#21262d;color:#c9d1d9;border:1px solid #30363d;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
+.log-scroll-btn:hover{background:#30363d;border-color:#58a6ff;color:#58a6ff}
+.log-scroll-btn svg{width:14px;height:14px;fill:currentColor}
+.live-box{position:relative;width:100%;border-radius:8px;overflow:hidden;border:2px solid #30363d;background:#000;aspect-ratio:4/3;margin-bottom:8px}
+.live-box img{width:100%;height:100%;object-fit:contain;display:block}
 .live-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;cursor:crosshair}
-.live-badge{position:absolute;top:8px;left:8px;z-index:3;background:rgba(220,38,38,0.9);color:#fff;border-radius:6px;padding:3px 10px;font-size:.7rem;font-weight:700;letter-spacing:0.5px;display:flex;align-items:center;gap:5px}
-.live-dot{width:8px;height:8px;background:#f85149;border-radius:50%;animation:blink 1s infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
-.live-off{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;color:#8b949e;font-size:.85rem;text-align:center}
-.live-hint{position:absolute;bottom:8px;right:8px;z-index:3;background:rgba(0,0,0,0.7);color:#8b949e;border-radius:6px;padding:3px 8px;font-size:.65rem}
-.logbox{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:6px;height:130px;overflow-y:auto;font-family:'Cascadia Code',Consolas,monospace;font-size:.65rem;line-height:1.5;color:#8b949e}
-.logbox .l-info{color:#8b949e}.logbox .l-success{color:#3fb950}.logbox .l-failed{color:#f85149}
-.logbox .l-blocked{color:#d29922}.logbox .l-warning{color:#d29922}.logbox .l-error{color:#f85149}
-.logbox .l-bot{color:#58a6ff}.logbox .l-rc{color:#bc8cff}.logbox .l-scrape{color:#79c0ff}
-.logbox .l-cookie{color:#f0883e}
-.rc-area{margin-top:8px}
-.rc-input-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
-.rc-input-row input{flex:1;font-size:.8rem;padding:7px 10px;margin-bottom:0}
-.rc-label{font-size:.68rem;color:#8b949e;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
-.rc-btns{display:flex;gap:4px;flex-wrap:wrap}
-.rc-btn{padding:5px 10px;background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;font-size:.72rem;cursor:pointer;white-space:nowrap;transition:all .15s;font-weight:500}
-.rc-btn:hover{background:#30363d;border-color:#484f58}
-.rc-divider{width:100%;height:1px;background:#30363d;margin:6px 0}
-.dpad-label{font-size:.68rem;color:#8b949e;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
-.dpad{display:flex;justify-content:center;gap:4px;align-items:center}
-.dpad-col{display:flex;flex-direction:column;gap:4px;align-items:center}
-.dpad-col .dpad-mid{display:flex;gap:4px;align-items:center}
-.dpad-btn{width:38px;height:38px;display:flex;align-items:center;justify-content:center;background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:8px;font-size:1rem;cursor:pointer;transition:all .15s;user-select:none;-webkit-user-select:none}
-.dpad-btn:hover{background:#30363d;border-color:#58a6ff;color:#58a6ff}
-.dpad-btn:active{background:#1f6feb33;border-color:#58a6ff;transform:scale(0.95)}
-.dpad-btn svg{width:16px;height:16px;fill:currentColor}
-textarea.cookie-input{min-height:100px;resize:vertical;font-size:.75rem;font-family:'Cascadia Code',Consolas,monospace;line-height:1.4}
-.hint{color:#8b949e;font-size:.65rem;margin-top:2px;line-height:1.3}
-.sse-status{position:fixed;bottom:8px;left:8px;z-index:99;font-size:.6rem;padding:3px 8px;border-radius:6px;font-weight:600}
-.sse-on{background:rgba(35,134,54,0.8);color:#fff}
-.sse-off{background:rgba(248,81,73,0.8);color:#fff}
+.live-tag{position:absolute;top:6px;left:6px;z-index:3;background:rgba(220,38,38,.85);color:#fff;border-radius:5px;padding:2px 8px;font-size:.62rem;font-weight:700;display:flex;align-items:center;gap:4px;letter-spacing:.3px}
+.live-tag .dot{width:6px;height:6px;background:#f85149;border-radius:50%;animation:blink 1s infinite}
+.live-off-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;color:#484f58;font-size:.8rem;text-align:center}
+.live-hint{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);z-index:3;background:rgba(0,0,0,.6);color:#484f58;border-radius:5px;padding:2px 8px;font-size:.6rem;pointer-events:none}
+.con-input-row{display:flex;gap:6px;align-items:center;margin-bottom:8px}
+.con-input-row input{flex:1;font-size:.82rem;padding:9px 11px}
+.con-btns{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+.con-btn{padding:6px 12px;background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;font-size:.72rem;cursor:pointer;white-space:nowrap;transition:all .15s;font-weight:500}
+.con-btn:hover{background:#30363d;border-color:#484f58}
+.con-divider{height:1px;background:#30363d;margin:6px 0}
+.dpad-wrap{display:flex;justify-content:center;margin-bottom:6px}
+.dpad-grid{display:grid;grid-template-columns:38px 38px 38px;grid-template-rows:38px 38px;gap:4px}
+.dpad-b{width:38px;height:38px;display:flex;align-items:center;justify-content:center;background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:8px;cursor:pointer;transition:all .15s;user-select:none;-webkit-user-select:none}
+.dpad-b:hover{background:#30363d;border-color:#58a6ff;color:#58a6ff}
+.dpad-b:active{background:#1f6feb33;transform:scale(.95)}
+.dpad-b svg{width:14px;height:14px;fill:currentColor}
+.con-scroll-row{display:flex;gap:6px}
+.con-scroll-btn{flex:1;padding:8px;background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:8px;cursor:pointer;text-align:center;font-size:.75rem;font-weight:500;transition:all .15s}
+.con-scroll-btn:hover{background:#30363d;border-color:#58a6ff;color:#58a6ff}
+.sse-badge{position:fixed;bottom:6px;right:6px;font-size:.55rem;padding:2px 7px;border-radius:5px;font-weight:600;z-index:99}
+.sse-on{background:rgba(35,134,54,.7);color:#fff}
+.sse-off{background:rgba(248,81,73,.7);color:#fff}
 </style></head><body>
 <div class="wrap">
-<h1>FB Auto-Comment Bot v13</h1>
-<p class="sub">Lightweight Live View + SSE Push + Stream Mode</p>
-
-<div class="card">
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-    <div>
-      <p style="font-weight:600" id="pT">Initializing...</p>
-      <p id="mT" style="color:#8b949e;font-size:.78rem">Connecting...</p>
-    </div>
-    <span class="badge b-idle" id="badge">IDLE</span>
+<div class="hdr"><h1>FB Auto-Comment Bot</h1><div class="sub">v13 &middot; Stream Mode &middot; Lightweight</div></div>
+<div class="acct-bar">
+  <div class="acct-avatar" id="acctAvatar">?</div>
+  <div class="acct-info">
+    <div class="acct-name" id="acctName">Belum login</div>
+    <div class="acct-status"><div class="status-dot sd-idle" id="statusDot"></div><span id="statusTxt">Menunggu cookie...</span></div>
   </div>
 </div>
-
+<div class="err-line hid" id="errBox"></div>
 <div class="stats">
-  <div class="stat stat-ok"><div class="num" id="sO">0</div><div class="lbl">Success</div></div>
-  <div class="stat stat-fail"><div class="num" id="sF">0</div><div class="lbl">Failed</div></div>
-  <div class="stat stat-bl"><div class="num" id="sB">0</div><div class="lbl">Blocked</div></div>
+  <div class="st s-ok"><div class="n" id="sO">0</div><div class="l">Success</div></div>
+  <div class="st s-fl"><div class="n" id="sF">0</div><div class="l">Failed</div></div>
+  <div class="st s-bk"><div class="n" id="sB">0</div><div class="l">Blocked</div></div>
 </div>
-
-<div class="card hid" id="acctCard">
-  <p style="color:#8b949e;font-size:.68rem;text-align:center;margin-bottom:2px">Username Facebook</p>
-  <p class="acct" id="acctName">-</p>
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('start')" id="tabBtnStart"><svg viewBox="0 0 24 24"><path d="M13 3L4 14h7l-2 7 9-11h-7l2-7z"/></svg> Start</button>
+  <button class="tab-btn" onclick="switchTab('log')" id="tabBtnLog"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg> Log</button>
+  <button class="tab-btn" onclick="switchTab('console')" id="tabBtnConsole"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4V4zm2 2v12h12V6H6zm2 2l4 4-4 4h2l4-4-4-4H8zm5 6h3v2h-3v-2z"/></svg> Console<div class="tab-dot off" id="consoleDot"></div></button>
 </div>
-
-<div class="card" id="loginCard">
-  <h2>Masukkan Cookie Facebook</h2>
-  <div id="loginMsg" class="msg msg-e hid"></div>
-  <div id="loginForm">
+<div class="tab-panel active" id="panelStart">
+  <div class="card" id="cookieCard">
+    <h2>Set Cookie Facebook</h2>
+    <div id="loginMsg" class="msg msg-e hid"></div>
     <label>Cookie String</label>
     <textarea class="cookie-input" id="inCookie" placeholder="Paste cookie Facebook di sini...&#10;&#10;Contoh: sb=value; datr=value; c_user=123456; xs=abc123; ..."></textarea>
-    <p class="hint">Cara ambil cookie: Buka facebook.com > F12 > Application > Cookies > Copy semua. Pastikan ada <b>c_user</b> dan <b>xs</b>. Atau gunakan <b>export FB='cookie'</b> di terminal.</p>
+    <p class="hint">F12 > Application > Cookies > Copy semua. Pastikan ada <b>c_user</b> dan <b>xs</b>.<br>Atau <b>export FB='cookie'</b> di terminal.</p>
+    <div class="row"><button class="btn btn-go btn-full" id="btnLogin" onclick="doLogin()">Load Cookie &amp; Login</button></div>
+  </div>
+  <div class="card hid" id="controlCard">
+    <h2>Bot Control</h2>
+    <button class="btn btn-go btn-full" id="btnStart" onclick="startBot()"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Start Auto Comment</button>
     <div class="row">
-      <button class="btn btn-go btn-full" id="btnLogin" onclick="doLogin()">Load Cookie & Login</button>
+      <button class="btn btn-stop btn-full" id="btnStop" onclick="stopBot()" disabled><svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg> Stop Bot</button>
+      <button class="btn btn-sec btn-sm" onclick="resetAll()">Reset</button>
     </div>
   </div>
 </div>
-
-<div class="card hid" id="liveCard">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-    <h2 style="margin-bottom:0">Live View Browser</h2>
-    <span style="font-size:.68rem;color:#8b949e" id="liveInfo">-</span>
-  </div>
-  <div class="live-container" id="liveContainer">
-    <div class="live-badge" id="liveBadge"><div class="live-dot"></div> LIVE</div>
-    <div class="live-off hid" id="liveOff">Browser tidak aktif</div>
-    <img id="liveImg" src="" alt="Browser Live">
-    <div class="live-overlay" onclick="onLiveClick(event)" id="liveOverlay"></div>
-    <div class="live-hint">Klik untuk remote control</div>
-  </div>
-</div>
-
-<div class="card hid" id="botCard">
-  <h2>Bot Control</h2>
-  <button class="btn btn-go btn-full" id="btnStart" onclick="startBot()">Start Auto Comment</button>
-  <div class="row" style="margin-bottom:0">
-    <button class="btn btn-stop btn-full" id="btnStop" onclick="stopBot()" disabled>Stop Bot</button>
-    <button class="btn btn-sec" onclick="resetAll()">Reset</button>
-  </div>
-</div>
-
-<div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-    <h2 style="margin-bottom:0">Activity Log</h2>
-  </div>
-  <div class="logbox" id="logBox">Connecting to server...</div>
-  <div class="rc-area">
-    <div class="rc-label">Remote Control</div>
-    <div class="rc-input-row">
-      <input type="text" id="rcInput" placeholder="Ketik teks atau perintah...">
-      <button class="rc-btn" onclick="rcSend()">Kirim</button>
-    </div>
-    <div class="rc-btns">
-      <button class="rc-btn" onclick="rcKey('Enter')">Enter</button>
-      <button class="rc-btn" onclick="rcKey('Tab')">Tab</button>
-      <button class="rc-btn" onclick="rcKey('Escape')">Esc</button>
-      <button class="rc-btn" onclick="rcKey('Backspace')">Backspace</button>
-      <button class="rc-btn" onclick="rcKey('Space')">Space</button>
-      <button class="rc-btn" onclick="rcScroll('down')">Scroll Down</button>
-      <button class="rc-btn" onclick="rcScroll('up')">Scroll Up</button>
-    </div>
-    <div class="rc-divider"></div>
-    <div class="dpad-label">Arah Navigasi</div>
-    <div class="dpad">
-      <div class="dpad-col">
-        <button class="dpad-btn" onclick="rcKey('ArrowUp')" title="Atas"><svg viewBox="0 0 24 24"><path d="M12 4l-8 8h5v8h6v-8h5z"/></svg></button>
-        <div class="dpad-mid">
-          <button class="dpad-btn" onclick="rcKey('ArrowLeft')" title="Kiri"><svg viewBox="0 0 24 24"><path d="M20 12l-8-8v5H4v6h8v5z"/></svg></button>
-          <button class="dpad-btn" onclick="rcKey('ArrowDown')" title="Bawah"><svg viewBox="0 0 24 24"><path d="M12 20l8-8h-5V4H9v8H4z"/></svg></button>
-          <button class="dpad-btn" onclick="rcKey('ArrowRight')" title="Kanan"><svg viewBox="0 0 24 24"><path d="M4 12l8-8v5h8v6h-8v5z"/></svg></button>
-        </div>
+<div class="tab-panel" id="panelLog">
+  <div class="card" style="padding:8px">
+    <div class="log-wrap">
+      <div class="log-box" id="logBox">Menunggu koneksi...</div>
+      <div class="log-scroll-bar">
+        <button class="log-scroll-btn" onclick="logScrollTop()" title="Ke atas"><svg viewBox="0 0 24 24"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg></button>
+        <button class="log-scroll-btn" onclick="logScrollBottom()" title="Ke bawah"><svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg></button>
       </div>
     </div>
   </div>
 </div>
+<div class="tab-panel" id="panelConsole">
+  <div class="card" style="padding:8px">
+    <div class="live-box" id="liveBox">
+      <div class="live-tag hid" id="liveTag"><div class="dot"></div>LIVE</div>
+      <div class="live-off-msg" id="liveOff">Browser tidak aktif</div>
+      <img id="liveImg" src="" alt="Live">
+      <div class="live-overlay" onclick="onLiveClick(event)"></div>
+      <div class="live-hint">Klik layar untuk mengontrol browser</div>
+    </div>
+    <div class="con-input-row">
+      <input type="text" id="rcInput" placeholder="Ketik teks untuk browser..." autocomplete="off">
+      <button class="con-btn" onclick="rcSend()" style="background:#238636;color:#fff;border-color:#238636">Kirim</button>
+    </div>
+    <div class="con-btns">
+      <button class="con-btn" onclick="rcKey('Enter')">Enter</button>
+      <button class="con-btn" onclick="rcKey('Tab')">Tab</button>
+      <button class="con-btn" onclick="rcKey('Escape')">Esc</button>
+      <button class="con-btn" onclick="rcKey('Backspace')">Del</button>
+      <button class="con-btn" onclick="rcKey('Space')">Space</button>
+      <button class="con-btn" onclick="rcKey('F5')">F5</button>
+    </div>
+    <div class="con-divider"></div>
+    <div class="dpad-wrap">
+      <div class="dpad-grid">
+        <div></div>
+        <button class="dpad-b" onclick="rcKey('ArrowUp')" title="Atas"><svg viewBox="0 0 24 24"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg></button>
+        <div></div>
+        <button class="dpad-b" onclick="rcKey('ArrowLeft')" title="Kiri"><svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6z"/></svg></button>
+        <button class="dpad-b" onclick="rcKey('ArrowDown')" title="Bawah"><svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg></button>
+        <button class="dpad-b" onclick="rcKey('ArrowRight')" title="Kanan"><svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg></button>
+      </div>
+    </div>
+    <div class="con-divider"></div>
+    <div class="con-scroll-row">
+      <button class="con-scroll-btn" onclick="rcScroll('up')">&#9650; Scroll Up</button>
+      <button class="con-scroll-btn" onclick="rcScroll('down')">Scroll Down &#9660;</button>
+    </div>
+  </div>
 </div>
-
-<div class="sse-status sse-off" id="sseStatus">SSE Offline</div>
-
+</div>
+<div class="sse-badge sse-off" id="sseBadge">SSE</div>
 <script>
-function api(u, m, d) {
-  var o = {method: m, headers: {"Content-Type": "application/json"}};
-  if (d) o.body = JSON.stringify(d);
-  return fetch(u, o).then(function(r) { return r.json(); }).catch(function() { return null; });
-}
-
-function renderLogs(logs) {
-  if (!logs || !logs.length) return;
-  var html = "";
-  for (var i = 0; i < Math.min(logs.length, 50); i++) {
-    var line = logs[i];
-    var cls = "l-info";
-    if (line.indexOf("[SUCCESS]") > -1) cls = "l-success";
-    else if (line.indexOf("[FAILED]") > -1) cls = "l-failed";
-    else if (line.indexOf("[BLOCKED]") > -1) cls = "l-blocked";
-    else if (line.indexOf("[WARNING]") > -1) cls = "l-warning";
-    else if (line.indexOf("[ERROR]") > -1) cls = "l-error";
-    else if (line.indexOf("[BOT]") > -1) cls = "l-bot";
-    else if (line.indexOf("[RC]") > -1) cls = "l-rc";
-    else if (line.indexOf("[SCRAPE]") > -1) cls = "l-scrape";
-    else if (line.indexOf("[COOKIE]") > -1) cls = "l-cookie";
-    var safe = line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    html += '<div class="' + cls + '">' + safe + '</div>';
-  }
-  document.getElementById("logBox").innerHTML = html;
-}
-
-var liveActive = false;
-
-function startLive() {
-  if (liveActive) return;
-  document.getElementById("liveImg").src = "/live";
-  liveActive = true;
-}
-
-function stopLive() {
-  if (!liveActive) return;
-  document.getElementById("liveImg").src = "";
-  liveActive = false;
-}
-
-function update(d) {
-  if (!d) return;
-  document.getElementById("badge").textContent = d.phase;
-  document.getElementById("badge").className = "badge b-" + d.phase.toLowerCase();
-  document.getElementById("pT").textContent = phaseLabel(d.phase);
-  document.getElementById("mT").textContent = d.msg || "";
-  document.getElementById("sO").textContent = d.ok;
-  document.getElementById("sF").textContent = d.fail;
-  document.getElementById("sB").textContent = d.blocked;
-
-  if (d.name) {
-    document.getElementById("acctCard").classList.remove("hid");
-    document.getElementById("acctName").textContent = d.name || "-";
-  }
-
-  var show = function(id) { document.getElementById(id).classList.remove("hid"); };
-  var hide = function(id) { document.getElementById(id).classList.add("hid"); };
-
-  hide("loginCard"); hide("liveCard"); hide("botCard");
-
-  if (d.phase === "IDLE") {
-    show("loginCard");
-    document.getElementById("loginForm").classList.remove("hid");
-    stopLive();
-    document.getElementById("liveOff").classList.remove("hid");
-  } else if (d.phase === "LOGIN") {
-    show("loginCard");
-    document.getElementById("loginForm").classList.add("hid");
-    show("liveCard");
-    startLive();
-    document.getElementById("liveOff").classList.add("hid");
-  } else if (d.phase === "READY" || d.phase === "RUNNING") {
-    show("botCard");
-    show("liveCard");
-    startLive();
-    document.getElementById("liveOff").classList.add("hid");
-  }
-
-  var lm = document.getElementById("loginMsg");
-  if (d.err) { lm.textContent = d.err; lm.className = "msg msg-e"; lm.classList.remove("hid"); }
-  else { lm.classList.add("hid"); }
-
-  if (d.phase === "RUNNING") {
-    document.getElementById("btnStart").disabled = true;
-    document.getElementById("btnStart").textContent = "Bot Sedang Berjalan...";
-    document.getElementById("btnStop").disabled = false;
-  } else if (d.phase === "READY") {
-    document.getElementById("btnStart").disabled = false;
-    document.getElementById("btnStart").textContent = "Start Auto Comment";
-    document.getElementById("btnStop").disabled = true;
-  }
-
-  document.getElementById("liveInfo").textContent = d.live_clients > 0 ? "Streaming..." : "Standby";
-  renderLogs(d.logs);
-}
-
-function phaseLabel(p) {
-  var m = {IDLE:"Login Diperlukan",LOGIN:"Memverifikasi Cookie...",READY:"Siap - Mulai Bot",RUNNING:"Bot Sedang Berjalan"};
-  return m[p] || p;
-}
-
-function doLogin() {
-  var c = document.getElementById("inCookie").value.trim();
-  if (!c) { alert("Paste cookie Facebook terlebih dahulu!"); return; }
-  var b = document.getElementById("btnLogin");
-  b.disabled = true; b.textContent = "Memverifikasi...";
-  api("/api/load-cookie", "POST", {cookie:c}).then(function(d) {
-    update(d); b.disabled = false; b.textContent = "Load Cookie & Login";
-  });
-}
-
-function onLiveClick(ev) {
-  var r = ev.currentTarget.getBoundingClientRect();
-  var x = ((ev.clientX - r.left) / r.width * 100).toFixed(1);
-  var y = ((ev.clientY - r.top) / r.height * 100).toFixed(1);
-  api("/api/rc/click", "POST", {x:+x, y:+y});
-}
-
-function rcSend() {
-  var t = document.getElementById("rcInput").value;
-  if (!t) return;
-  api("/api/rc/type", "POST", {text:t});
-  document.getElementById("rcInput").value = "";
-}
-function rcKey(k) { api("/api/rc/key", "POST", {key:k}); }
-function rcScroll(d) { api("/api/rc/scroll", "POST", {direction:d}); }
-
-document.getElementById("rcInput").addEventListener("keydown", function(e) {
-  if (e.key === "Enter") { e.preventDefault(); rcSend(); }
-});
-
-function startBot() {
-  document.getElementById("btnStart").disabled = true;
-  api("/api/bot-start", "POST").then(function(d) { update(d); });
-}
-function stopBot() { api("/api/bot-stop", "POST").then(function(d) { update(d); }); }
-function resetAll() {
-  if (!confirm("Reset semua data?")) return;
-  stopLive();
-  api("/api/reset", "POST").then(function() { location.reload(); });
-}
-
-// =============================================================
-// SSE (Server-Sent Events) - replaces polling completely
-// Zero GET /api/status requests, push-based real-time updates
-// =============================================================
-(function() {
-  var sseEl = document.getElementById("sseStatus");
-  var es = null;
-  var retryCount = 0;
-
-  function connect() {
-    if (es) { es.close(); es = null; }
-
-    es = new EventSource("/api/stream");
-
-    es.onopen = function() {
-      retryCount = 0;
-      sseEl.textContent = "SSE Connected";
-      sseEl.className = "sse-status sse-on";
-    };
-
-    es.onmessage = function(e) {
-      try {
-        var d = JSON.parse(e.data);
-        update(d);
-      } catch(err) {}
-    };
-
-    es.onerror = function() {
-      sseEl.textContent = "SSE Reconnecting...";
-      sseEl.className = "sse-status sse-off";
-      es.close();
-      es = null;
-      retryCount++;
-      var delay = Math.min(retryCount * 2, 10) * 1000;
-      setTimeout(connect, delay);
-    };
-  }
-
-  // Initial load (one-time, not polling)
-  api("/api/status").then(function(d) {
-    update(d);
-    connect();
-  });
-
-  window.addEventListener("beforeunload", function() {
-    if (es) es.close();
-  });
-})();
+function api(u,m,d){var o={method:m||"GET",headers:{"Content-Type":"application/json"}};if(d)o.body=JSON.stringify(d);return fetch(u,o).then(function(r){return r.json()}).catch(function(){return null})}
+var activeTab="start",liveActive=false,_logAtBottom=true;
+function switchTab(n){activeTab=n;document.querySelectorAll(".tab-btn").forEach(function(b){b.classList.remove("active")});document.querySelectorAll(".tab-panel").forEach(function(p){p.classList.remove("active")});document.getElementById("tabBtn"+n.charAt(0).toUpperCase()+n.slice(1)).classList.add("active");document.getElementById("panel"+n.charAt(0).toUpperCase()+n.slice(1)).classList.add("active");if(n==="console")startLive();else stopLive()}
+function startLive(){if(liveActive)return;document.getElementById("liveImg").src="/live";liveActive=true}
+function stopLive(){if(!liveActive)return;document.getElementById("liveImg").src="";liveActive=false}
+function renderLogs(logs){if(!logs||!logs.length)return;var box=document.getElementById("logBox");var wasAtBottom=box.scrollTop+box.clientHeight>=box.scrollHeight-30;var html="";var last=Math.max(0,logs.length-200);for(var i=last;i<logs.length;i++){var line=logs[i];var c="li";if(line.indexOf("[SUCCESS]")>-1)c="ls";else if(line.indexOf("[FAILED]")>-1)c="lf";else if(line.indexOf("[BLOCKED]")>-1)c="lb";else if(line.indexOf("[WARNING]")>-1)c="lw";else if(line.indexOf("[ERROR]")>-1)c="le";else if(line.indexOf("[BOT]")>-1)c="lbot";else if(line.indexOf("[RC]")>-1)c="lrc";else if(line.indexOf("[SCRAPE]")>-1)c="lsc";else if(line.indexOf("[COOKIE]")>-1)c="lck";var s=line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");html+='<div class="'+c+'">'+s+"</div>"}box.innerHTML=html;if(_logAtBottom||wasAtBottom)box.scrollTop=box.scrollHeight}
+function logScrollTop(){document.getElementById("logBox").scrollTop=0}
+function logScrollBottom(){var b=document.getElementById("logBox");b.scrollTop=b.scrollHeight}
+function update(d){if(!d)return;document.getElementById("sO").textContent=d.ok;document.getElementById("sF").textContent=d.fail;document.getElementById("sB").textContent=d.blocked;if(d.name&&d.name!=="N/A"){document.getElementById("acctAvatar").textContent=d.name.charAt(0).toUpperCase();document.getElementById("acctName").textContent=d.name}else{document.getElementById("acctAvatar").textContent="?";document.getElementById("acctName").textContent="Belum login"}var dot=document.getElementById("statusDot");dot.className="status-dot sd-"+d.phase.toLowerCase();document.getElementById("statusTxt").textContent=d.msg||d.phase;var eb=document.getElementById("errBox");if(d.err){eb.textContent=d.err;eb.classList.remove("hid")}else{eb.classList.add("hid")}var sh=function(id){document.getElementById(id).classList.remove("hid")};var hi=function(id){document.getElementById(id).classList.add("hid")};if(d.phase==="IDLE"){sh("cookieCard");hi("controlCard");document.getElementById("loginMsg").classList.add("hid")}else if(d.phase==="LOGIN"){sh("cookieCard");hi("controlCard");var lm=document.getElementById("loginMsg");lm.textContent="Memverifikasi...";lm.className="msg msg-e";lm.classList.remove("hid");document.getElementById("btnLogin").disabled=true}else if(d.phase==="READY"){hi("cookieCard");sh("controlCard");document.getElementById("btnStart").disabled=false;document.getElementById("btnStart").innerHTML='<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor"><path d="M8 5v14l11-7z"/></svg> Start Auto Comment';document.getElementById("btnStop").disabled=true}else if(d.phase==="RUNNING"){hi("cookieCard");sh("controlCard");document.getElementById("btnStart").disabled=true;document.getElementById("btnStart").innerHTML='<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Bot Berjalan...';document.getElementById("btnStop").disabled=false}var cD=document.getElementById("consoleDot");var lT=document.getElementById("liveTag");var lO=document.getElementById("liveOff");if(d.phase==="READY"||d.phase==="RUNNING"||d.phase==="LOGIN"){cD.classList.remove("off");lO.classList.add("hid");lT.classList.remove("hid")}else{cD.classList.add("off");lO.classList.remove("hid");lT.classList.add("hid")}renderLogs(d.logs)}
+function doLogin(){var c=document.getElementById("inCookie").value.trim();if(!c){alert("Paste cookie Facebook terlebih dahulu!");return}var b=document.getElementById("btnLogin");b.disabled=true;b.textContent="Memverifikasi...";api("/api/load-cookie","POST",{cookie:c}).then(function(d){update(d);b.disabled=false;b.textContent="Load Cookie & Login"})}
+function startBot(){document.getElementById("btnStart").disabled=true;api("/api/bot-start","POST")}
+function stopBot(){api("/api/bot-stop","POST")}
+function resetAll(){if(!confirm("Reset semua data bot?"))return;stopLive();api("/api/reset","POST").then(function(){location.reload()})}
+function onLiveClick(ev){var r=ev.currentTarget.getBoundingClientRect();var x=((ev.clientX-r.left)/r.width*100).toFixed(1);var y=((ev.clientY-r.top)/r.height*100).toFixed(1);api("/api/rc/click","POST",{x:+x,y:+y})}
+function rcSend(){var t=document.getElementById("rcInput").value;if(!t)return;api("/api/rc/type","POST",{text:t});document.getElementById("rcInput").value=""}
+function rcKey(k){api("/api/rc/key","POST",{key:k})}
+function rcScroll(d){api("/api/rc/scroll","POST",{direction:d})}
+document.getElementById("rcInput").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();rcSend()}});
+(function(){var sE=document.getElementById("sseBadge");var es=null;var r=0;function c(){if(es){es.close();es=null}es=new EventSource("/api/stream");es.onopen=function(){r=0;sE.textContent="SSE Live";sE.className="sse-badge sse-on"};es.onmessage=function(e){try{update(JSON.parse(e.data))}catch(er){}};es.onerror=function(){sE.textContent="...";sE.className="sse-badge sse-off";es.close();es=null;r++;setTimeout(c,Math.min(r*2,10)*1000)}}api("/api/status").then(function(d){update(d);c()});window.addEventListener("beforeunload",function(){if(es)es.close()})})();
 </script></body></html>"""
 
 # ===========================================================
