@@ -157,24 +157,51 @@ def check_login(page):
 
 def click_home_button(page):
     """Click Facebook Home button to refresh feed without reload (keeps cookie alive)."""
-    selectors = [
-        'a[href="/"], a[href="https://www.facebook.com/"]',
-        'a[aria-label="Home"]', 'a[aria-label="Beranda"]',
-        'div[role="navigation"] a[href="/"]',
-        'span[data-pagelet="LeftNav"] a[href="/"]',
+    # Strategy 1: FB sidebar Home icon with specific aria-label
+    home_selectors = [
+        'a[aria-label="Home"]',
+        'a[aria-label="Beranda"]',
+        'a[aria-label="Beranda"][role="link"]',
     ]
-    for sel in selectors:
+    for sel in home_selectors:
         try:
             els = page.query_selector_all(sel)
             for el in els:
                 if el.is_visible():
-                    el.click()
-                    return True
+                    href = el.get_attribute("href") or ""
+                    # Make sure it's actually the home link
+                    if href == "/" or href == "/" or href.startswith("https://www.facebook.com/?"):
+                        el.click()
+                        slog("Klik tombol Home (aria-label)", "BOT")
+                        return True
         except:
             pass
-    # Fallback: navigate via URL (soft)
+
+    # Strategy 2: sidebar navigation home link (has tooltip)
+    try:
+        for el in page.query_selector_all('div[role="navigation"] a[href="/"]'):
+            if el.is_visible():
+                el.click()
+                slog("Klik tombol Home (navigation)", "BOT")
+                return True
+    except:
+        pass
+
+    # Strategy 3: FB logo in header
+    try:
+        for sel in ['a[href="/"][data-testid]', 'header a[href="/"]']:
+            el = page.query_selector(sel)
+            if el and el.is_visible():
+                el.click()
+                slog("Klik tombol Home (header)", "BOT")
+                return True
+    except:
+        pass
+
+    # Fallback: navigate via location (soft navigation)
     try:
         page.evaluate("window.location.href = '/'")
+        slog("Navigasi ke Home (fallback)", "BOT")
         return True
     except:
         pass
@@ -369,34 +396,85 @@ def comment_post(page, url, txt):
     return send_comment(page, box, txt)
 
 def find_posts_on_page(page):
-    """Find post links visible on the current page (no scrolling)."""
-    link_sel = ('a[href*="story_fbid"], a[href*="/posts/"], '
-                'a[href*="/photo/?fbid="], a[href*="/permalink"]')
+    """Find post links visible on the current page.
+    Uses multiple strategies: anchor links, timestamp elements,
+    and aria-label based selectors for maximum coverage."""
+    collected = []
+    seen_urls = set()
     skip_p = ["/groups/", "/watch/", "/reel/", "/stories/", "/settings/",
               "/messages/", "/notifications/", "/marketplace/", "/gaming/",
-              "/login", "/composer/", "/videos/"]
+              "/login", "/composer/", "/videos/", "/events/", "/jobs/",
+              "/fundraisers/", "/pages/", "/help/", "/privacy/"]
     inc_p = ["story_fbid", "/posts/", "/permalink", "fbid=", "/photos/"]
 
-    collected = []
-    links = page.query_selector_all(link_sel)
-    for lk in links:
+    def process_href(href):
+        if not href or "#" in href or "javascript:" in href.lower():
+            return None
+        if href.startswith("/"):
+            href = "https://www.facebook.com" + href
+        cl = clean_url(href)
+        ul = cl.lower()
+        if any(s in ul for s in skip_p):
+            return None
+        if not any(pp in ul for pp in inc_p):
+            return None
+        pid = extract_id(cl)
+        if pid and cl not in seen_urls:
+            seen_urls.add(cl)
+            return {"id": pid, "url": cl}
+        return None
+
+    # Strategy 1: anchor tags with post links
+    link_selectors = [
+        'a[href*="story_fbid"]',
+        'a[href*="/posts/"]',
+        'a[href*="/photo/?fbid="]',
+        'a[href*="/permalink"]',
+    ]
+    for sel in link_selectors:
         try:
-            href = lk.get_attribute("href") or ""
-            if not href:
-                continue
-            if href.startswith("/"):
-                href = "https://www.facebook.com" + href
-            cl = clean_url(href)
-            ul = cl.lower()
-            if any(s in ul for s in skip_p):
-                continue
-            if not any(pp in ul for pp in inc_p):
-                continue
-            pid = extract_id(cl)
-            if pid:
-                collected.append({"id": pid, "url": cl})
+            links = page.query_selector_all(sel)
+            for lk in links:
+                try:
+                    href = lk.get_attribute("href") or ""
+                    result = process_href(href)
+                    if result:
+                        collected.append(result)
+                except:
+                    continue
         except:
             continue
+
+    # Strategy 2: timestamp elements (a > abbr > time) - common FB post pattern
+    try:
+        for ts in page.query_selector_all('a abbr time, a span time, a[role="link"] time'):
+            try:
+                anchor = ts.evaluate_handle("el => el.closest('a')")
+                if anchor:
+                    href = anchor.get_attribute("href") or ""
+                    result = process_href(href)
+                    if result:
+                        collected.append(result)
+            except:
+                continue
+    except:
+        pass
+
+    # Strategy 3: find all anchors containing timestamps (recent posts)
+    try:
+        for a in page.query_selector_all('a[href]'):
+            try:
+                href = a.get_attribute("href") or ""
+                # Only process links that look like post permalinks
+                if any(kw in href.lower() for kw in ["story_fbid", "/posts/", "/permalink", "fbid="]):
+                    result = process_href(href)
+                    if result:
+                        collected.append(result)
+            except:
+                continue
+    except:
+        pass
+
     return collected
 
 # ===========================================================
@@ -628,11 +706,23 @@ def playwright_thread_func():
 
                             # Stream mode: scroll -> find -> comment -> repeat
                             no_new_count = 0
+                            # Initial scroll to trigger feed loading
+                            for _init_sc in range(3):
+                                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                                time.sleep(2)
+                            # Scroll back to top for clean detection
+                            page.evaluate("window.scrollTo(0, 0)")
+                            time.sleep(2)
+
                             while _bot_running and page:
                                 scroll_round += 1
                                 # Load ceklist & restricted periodically
                                 ckl = load_set(CEKLIST)
                                 rst = load_set(RESTRICTED)
+
+                                # Scroll down to load new posts
+                                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                                time.sleep(3)  # Wait for lazy-loaded content
 
                                 # Find posts on current page
                                 posts = find_posts_on_page(page)
@@ -647,7 +737,8 @@ def playwright_thread_func():
                                     slog(f"Scroll #{scroll_round}: {len(new_posts)} post baru ditemukan", "SCRAPE")
                                 else:
                                     no_new_count += 1
-                                    slog(f"Scroll #{scroll_round}: tidak ada post baru", "BOT")
+                                    if no_new_count <= 3 or no_new_count % 5 == 0:
+                                        slog(f"Scroll #{scroll_round}: tidak ada post baru ({no_new_count}x)", "BOT")
 
                                 # Comment on each new post immediately
                                 for idx, pst in enumerate(new_posts):
@@ -718,13 +809,11 @@ def playwright_thread_func():
                                 if not _bot_running:
                                     break
 
-                                # Scroll down to find more posts
-                                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                                # Update status
                                 sset("msg", f"Scrolling... Total komentari: {total_commented}")
-                                time.sleep(3)
 
-                                # If no new posts found for 10 consecutive scrolls, click Home button to refresh
-                                if no_new_count >= 10:
+                                # If no new posts found for 15 consecutive scrolls, click Home button to refresh
+                                if no_new_count >= 15:
                                     slog("Tidak ada post baru setelah 10 scroll, klik Home button...", "BOT")
                                     click_home_button(page)
                                     time.sleep(4)
