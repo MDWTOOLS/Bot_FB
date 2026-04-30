@@ -1,5 +1,8 @@
 {
   "min_delay": 5,
   "max_delay": 15,
+  "max_retry": 2,
+  "retry_wait": 3,
+  "scroll_interval": 8,
   "target_urls": []
 }

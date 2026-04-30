@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
-Bot Facebook v14 - Railway Deployment
+Bot Facebook v15 - Railway Deployment
 - Cookie-based auth (env FB='cookie')
 - Live View: MJPEG stream (captures inside bot loop, always live)
 - SSE push for status (NO polling = zero GET /api/status spam)
 - Stream mode: find post -> comment -> next
 - No limits: continuous scroll & comment
+- Anti-detection: human-like typing, variable delays, smart scroll
 - Queue architecture: ALL Playwright ops single thread (safe)
 - RC (remote control) with D-Pad
 - Notes page: Success/Blocked URL viewer
+- Comments manager: add/edit/delete with multiline support
+- Settings page: configure delays, retry, scroll speed
 - Persistent storage via Railway Volume (/app/data)
 - Optimized for Railway (viewport 800x600, JPEG q=20, low FPS)
 """
@@ -114,7 +117,12 @@ def load_cfg():
     if os.path.exists(p):
         with open(p, "r", encoding="utf-8") as f:
             return json.load(f)
-    return {}
+    return {"min_delay": 5, "max_delay": 15, "max_retry": 2, "retry_wait": 3, "scroll_interval": 8, "target_urls": []}
+
+def save_cfg(cfg):
+    p = os.path.join(APP_DIR, "config.json")
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
 
 def load_comments():
     p = os.path.join(APP_DIR, "comments.txt")
@@ -365,20 +373,31 @@ def is_restricted(page):
     return False, ""
 
 def type_text(box, txt):
+    """Human-like typing with variable speed and random pauses."""
     lines = txt.split("\n")
     for i, ln in enumerate(lines):
         if ln.strip():
-            box.type(ln, delay=random.randint(15, 40))
-            time.sleep(0.2)
+            # Type character by character with human-like speed
+            for ch in ln:
+                box.type(ch, delay=0)
+                time.sleep(random.uniform(0.03, 0.12))
+                # Random micro-pause every 3-8 chars (simulates thinking)
+                if random.random() < 0.15:
+                    time.sleep(random.uniform(0.2, 0.6))
+            # Small pause after each line
+            time.sleep(random.uniform(0.3, 0.8))
         if i < len(lines) - 1:
             box.press("Shift+Enter")
-            time.sleep(0.2)
+            time.sleep(random.uniform(0.3, 0.7))
 
 def send_comment(page, box, txt):
+    # Pre-type delay (human reading the post)
+    time.sleep(random.uniform(1.0, 3.0))
     box.click()
-    time.sleep(0.5)
+    time.sleep(random.uniform(0.3, 0.8))
     type_text(box, txt)
-    time.sleep(1)
+    # Post-type delay (human reviewing before send)
+    time.sleep(random.uniform(0.8, 2.5))
     done = False
     for sel in ['div[aria-label="Kirim"][role="button"]', 'div[aria-label="kirim"][role="button"]',
                 'div[aria-label="Comment"][role="button"]', 'div[aria-label="Komentari"][role="button"]',
@@ -750,6 +769,9 @@ def playwright_thread_func():
                     cfg = load_cfg()
                     min_d = cfg.get("min_delay", 5)
                     max_d = cfg.get("max_delay", 15)
+                    max_retry = cfg.get("max_retry", 2)
+                    retry_wait = cfg.get("retry_wait", 3)
+                    scroll_interval = cfg.get("scroll_interval", 8)
                     targets = ["https://www.facebook.com/"]
                     for u in cfg.get("target_urls", []):
                         if u and u not in targets:
@@ -772,9 +794,9 @@ def playwright_thread_func():
                             no_new_count = 0
                             for _init_sc in range(3):
                                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                                time.sleep(2)
+                                time.sleep(3)
                             page.evaluate("window.scrollTo(0, 0)")
-                            time.sleep(2)
+                            time.sleep(3)
                             capture_frame(page)
 
                             while _bot_running and page:
@@ -782,8 +804,11 @@ def playwright_thread_func():
                                 ckl = load_set(CEKLIST)
                                 rst = load_set(RESTRICTED)
 
-                                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                                time.sleep(3)
+                                # Smooth scroll instead of instant jump
+                                scroll_px = random.randint(400, 900)
+                                page.evaluate(f"window.scrollBy(0, {scroll_px})")
+                                scroll_wait = random.uniform(scroll_interval * 0.7, scroll_interval * 1.3)
+                                time.sleep(scroll_wait)
                                 capture_frame(page)
 
                                 posts = find_posts_on_page(page)
@@ -798,7 +823,8 @@ def playwright_thread_func():
                                     slog(f"Scroll #{scroll_round}: {len(new_posts)} post baru ditemukan", "SCRAPE")
                                 else:
                                     no_new_count += 1
-                                    if no_new_count <= 3 or no_new_count % 5 == 0:
+                                    # Only log occasionally to avoid spam
+                                    if no_new_count in (1, 5, 10):
                                         slog(f"Scroll #{scroll_round}: tidak ada post baru ({no_new_count}x)", "BOT")
 
                                 for idx, pst in enumerate(new_posts):
@@ -810,7 +836,7 @@ def playwright_thread_func():
                                     short_url = pst["url"][:50] + "..."
                                     slog(f"Mengomentari post {total_commented + idx + 1}...", "BOT")
 
-                                    for att in range(1, MAX_RETRY + 1):
+                                    for att in range(1, max_retry + 1):
                                         if not _bot_running:
                                             break
                                         try:
@@ -818,13 +844,13 @@ def playwright_thread_func():
                                             if ok:
                                                 break
                                             else:
-                                                co_sleep(RETRY_WAIT)
+                                                co_sleep(retry_wait)
                                         except PlaywrightTimeout:
                                             msg = "timeout"
-                                            co_sleep(RETRY_WAIT)
+                                            co_sleep(retry_wait)
                                         except Exception as e:
                                             msg = str(e)[:60]
-                                            co_sleep(RETRY_WAIT)
+                                            co_sleep(retry_wait)
 
                                     if ok:
                                         sset("ok", sget("ok") + 1)
@@ -864,10 +890,10 @@ def playwright_thread_func():
                                 if not _bot_running:
                                     break
                                 sset("msg", f"Scrolling... Total komentari: {total_commented}")
-                                if no_new_count >= 15:
+                                if no_new_count >= 10:
                                     slog("Tidak ada post baru, klik Home...", "BOT")
                                     click_home_button(page)
-                                    time.sleep(4)
+                                    time.sleep(random.uniform(3, 6))
                                     dismiss_dialogs(page)
                                     capture_frame(page)
                                     no_new_count = 0
@@ -1014,6 +1040,7 @@ textarea.cookie-input{min-height:90px;resize:vertical;font-size:.72rem;font-fami
     <div class="gear-menu" id="gearMenu">
       <a href="/notes"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg><span class="lbl">Note Activations</span><span class="badge" id="menuNotesBadge">0</span></a>
       <a href="/comments"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg><span class="lbl">Comments</span><span class="badge" id="menuCommentsBadge">0</span></a>
+      <a href="/settings"><svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92-3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg><span class="lbl">Settings</span></a>
     </div>
   </div>
 </div>
@@ -1393,8 +1420,120 @@ function loadComments(){
     if(d&&d.comments){comments=d.comments;renderList()}
   }).catch(function(){});
 }
-document.getElementById('newComment').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();addComment()}});
 loadComments();
+</script></body></html>"""
+
+# ===========================================================
+#  HTML TEMPLATE - SETTINGS PAGE
+# ===========================================================
+HTML_SETTINGS = """<!DOCTYPE html>
+<html lang="id"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Settings - Bot Facebook</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
+.wrap{max-width:520px;margin:0 auto;padding:12px 10px}
+.top-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.back-btn{width:36px;height:36px;border-radius:50%;background:#161b22;border:1px solid #30363d;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;color:#c9d1d9;text-decoration:none}
+.back-btn:hover{background:#21262d;border-color:#58a6ff;color:#58a6ff}
+.back-btn svg{width:18px;height:18px;fill:currentColor}
+.page-title{flex:1}
+.page-title h1{font-size:1rem;color:#58a6ff;font-weight:700;letter-spacing:.5px}
+.page-title .sub{color:#484f58;font-size:.6rem;margin-top:1px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-bottom:10px}
+.card h2{font-size:.72rem;color:#484f58;margin-bottom:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.fg{margin-bottom:14px}
+.fg:last-child{margin-bottom:0}
+.fg .fl{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
+.fg .fl label{font-size:.78rem;color:#c9d1d9;font-weight:600}
+.fg .fl .hint{font-size:.6rem;color:#484f58}
+.fg input{width:100%;padding:9px 11px;background:#0d1117;border:1px solid #30363d;border-radius:8px;color:#e6edf3;font-size:.85rem;outline:none;font-family:inherit}
+.fg input:focus{border-color:#58a6ff}
+.fg .desc{font-size:.62rem;color:#484f58;margin-top:4px;line-height:1.4}
+.btn{padding:10px 18px;border:none;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn-go{background:#238636;color:#fff}.btn-go:hover{background:#2ea043}
+.btn-full{width:100%;padding:12px;font-size:.9rem}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#238636;color:#fff;padding:8px 18px;border-radius:8px;font-size:.78rem;font-weight:600;z-index:99;transition:transform .3s;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.err{background:#da3633}
+.sep{height:1px;background:#21262d;margin:6px 0 12px}
+</style></head><body>
+<div class="wrap">
+<div class="top-bar">
+  <a href="/" class="back-btn" title="Kembali"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></a>
+  <div class="page-title"><h1>SETTINGS</h1><div class="sub">Bot Facebook &middot; Create by MDW</div></div>
+</div>
+
+<div class="card">
+  <h2>Delay Pengaturan</h2>
+  <div class="fg">
+    <div class="fl"><label>Min Delay (detik)</label><span class="hint">antar komentar</span></div>
+    <input type="number" id="minDelay" min="1" max="120" step="1">
+    <div class="desc">Jeda minimum antar komentar (default: 5)</div>
+  </div>
+  <div class="fg">
+    <div class="fl"><label>Max Delay (detik)</label><span class="hint">antar komentar</span></div>
+    <input type="number" id="maxDelay" min="1" max="300" step="1">
+    <div class="desc">Jeda maksimum antar komentar (default: 15)</div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Scroll &amp; Retry</h2>
+  <div class="fg">
+    <div class="fl"><label>Scroll Interval (detik)</label></div>
+    <input type="number" id="scrollInterval" min="2" max="60" step="1">
+    <div class="desc">Jeda antar scroll saat mencari post baru (default: 8)</div>
+  </div>
+  <div class="fg">
+    <div class="fl"><label>Max Retry</label><span class="hint">komentar gagal</span></div>
+    <input type="number" id="maxRetry" min="0" max="10" step="1">
+    <div class="desc">Jumlah percobaan ulang saat komentar gagal (default: 2)</div>
+  </div>
+  <div class="fg">
+    <div class="fl"><label>Retry Wait (detik)</label><span class="hint">jeda antar retry</span></div>
+    <input type="number" id="retryWait" min="1" max="30" step="1">
+    <div class="desc">Jeda sebelum mencoba ulang komentar (default: 3)</div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Anti-Detection</h2>
+  <div class="desc" style="margin-bottom:8px">Bot sudah otomatis menggunakan human-like typing dengan kecepatan variabel dan jeda acak. Semakin tinggi delay, semakin aman dari deteksi spam Facebook.</div>
+</div>
+
+<button class="btn btn-go btn-full" onclick="saveSettings()">Simpan Pengaturan</button>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+function toast(msg,isErr){var t=document.getElementById('toast');t.textContent=msg;t.className=isErr?'toast err show':'toast show';setTimeout(function(){t.className='toast'},2500)}
+function loadSettings(){
+  fetch('/api/config').then(function(r){return r.json()}).then(function(d){
+    if(!d)return;
+    document.getElementById('minDelay').value=d.min_delay||5;
+    document.getElementById('maxDelay').value=d.max_delay||15;
+    document.getElementById('scrollInterval').value=d.scroll_interval||8;
+    document.getElementById('maxRetry').value=d.max_retry||2;
+    document.getElementById('retryWait').value=d.retry_wait||3;
+  }).catch(function(){});
+}
+function saveSettings(){
+  var cfg={
+    min_delay:parseInt(document.getElementById('minDelay').value)||5,
+    max_delay:parseInt(document.getElementById('maxDelay').value)||15,
+    scroll_interval:parseInt(document.getElementById('scrollInterval').value)||8,
+    max_retry:parseInt(document.getElementById('maxRetry').value)||2,
+    retry_wait:parseInt(document.getElementById('retryWait').value)||3,
+    target_urls:[]
+  };
+  if(cfg.min_delay>cfg.max_delay){toast('Min delay tidak boleh lebih besar dari Max delay!',true);return}
+  fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)})
+  .then(function(r){return r.json()})
+  .then(function(d){if(d&&d.ok){toast('Pengaturan berhasil disimpan!')}else{toast('Gagal menyimpan!',true)}})
+  .catch(function(){toast('Error!',true)});
+}
+loadSettings();
 </script></body></html>"""
 
 # ===========================================================
@@ -1416,6 +1555,41 @@ def notes_page():
 @app.route("/comments")
 def comments_page():
     return render_template_string(HTML_COMMENTS)
+
+@app.route("/settings")
+def settings_page():
+    return render_template_string(HTML_SETTINGS)
+
+@app.route("/api/config")
+def api_get_config():
+    try:
+        cfg = load_cfg()
+        return jsonify(cfg)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/config", methods=["PUT"])
+def api_set_config():
+    try:
+        d = request.get_json()
+        old = load_cfg()
+        # Merge: only update provided keys, keep target_urls
+        if "min_delay" in d:
+            old["min_delay"] = max(1, int(d["min_delay"]))
+        if "max_delay" in d:
+            old["max_delay"] = max(1, int(d["max_delay"]))
+        if "scroll_interval" in d:
+            old["scroll_interval"] = max(2, int(d["scroll_interval"]))
+        if "max_retry" in d:
+            old["max_retry"] = max(0, int(d["max_retry"]))
+        if "retry_wait" in d:
+            old["retry_wait"] = max(1, int(d["retry_wait"]))
+        if "target_urls" in d:
+            old["target_urls"] = d["target_urls"]
+        save_cfg(old)
+        return jsonify({"ok": True, "config": old})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/api/comments")
 def api_get_comments():
