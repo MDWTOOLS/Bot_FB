@@ -594,49 +594,21 @@ def playwright_thread_func():
     ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.230 Safari/537.36"
 
     def find_chromium():
-        """Find Chromium binary on this system."""
-        # Check common system paths
-        for p in ["/usr/bin/chromium", "/usr/bin/chromium-browser",
-                   "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable",
-                   "/snap/bin/chromium"]:
-            if os.path.exists(p):
-                return p
-        # Check env var
-        env_path = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH", "")
-        if env_path and os.path.exists(env_path):
-            return env_path
-        # Try which/whereis
-        import shutil
-        for cmd in ["chromium", "chromium-browser", "google-chrome"]:
-            found = shutil.which(cmd)
-            if found:
-                return found
-        return ""
-
-    def launch_browser():
         nonlocal ctx, page
         os.makedirs(BROWSER_DATA, exist_ok=True)
-        exec_path = find_chromium()
-        if exec_path:
-            slog(f"Menggunakan system Chromium: {exec_path}", "BROWSER")
-            # Set env so Playwright picks it up
-            os.environ["PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"] = exec_path
-        else:
-            slog("Tidak menemukan system Chromium, gunakan Playwright bundled", "WARNING")
         try:
             ctx = pw.chromium.launch_persistent_context(
                 BROWSER_DATA, headless=True, args=bargs,
-                executable_path=exec_path if exec_path else None,
                 viewport=LIVE_VIEWPORT, user_agent=ua, locale="id-ID")
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            _page_ref = page
+            slog("Browser berhasil dijalankan", "BROWSER")
+            return True
         except Exception as e:
-            slog(f"Launch error (exec_path): {str(e)[:80]}", "ERROR")
-            # Fallback: try without executable_path
-            slog("Mencoba fallback tanpa executable_path...", "WARNING")
-            ctx = pw.chromium.launch_persistent_context(
-                BROWSER_DATA, headless=True, args=bargs,
-                viewport=LIVE_VIEWPORT, user_agent=ua, locale="id-ID")
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        _page_ref = page
+            slog(f"Browser gagal: {str(e)[:80]}", "ERROR")
+            sset("err", f"Browser error: {str(e)[:60]}")
+            sset("phase", "IDLE")
+            return False
 
     def close_browser():
         nonlocal ctx, page
@@ -653,7 +625,7 @@ def playwright_thread_func():
             if ENV_COOKIE and sget("phase") == "IDLE" and not ctx:
                 pr(f"  {C.Y}Cookie ditemukan dari env FB, memuat otomatis...{C.R}")
                 cmd_put("load_cookie", {"cookie": ENV_COOKIE})
-                time.sleep(1)
+                time.sleep(30)  # Wait 30s before retry to prevent spam
 
             while True:
                 try:
@@ -671,7 +643,8 @@ def playwright_thread_func():
                             sset("phase", "IDLE")
                             continue
                         if ctx is None:
-                            launch_browser()
+                            if not find_chromium():
+                                continue
                         sset("phase", "LOGIN")
                         sset("msg", "Memuat cookie...")
                         sset("err", "")
