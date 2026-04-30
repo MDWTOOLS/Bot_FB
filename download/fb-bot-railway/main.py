@@ -593,18 +593,48 @@ def playwright_thread_func():
     ]
     ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.230 Safari/537.36"
 
+    def find_chromium():
+        """Find Chromium binary on this system."""
+        # Check common system paths
+        for p in ["/usr/bin/chromium", "/usr/bin/chromium-browser",
+                   "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable",
+                   "/snap/bin/chromium"]:
+            if os.path.exists(p):
+                return p
+        # Check env var
+        env_path = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH", "")
+        if env_path and os.path.exists(env_path):
+            return env_path
+        # Try which/whereis
+        import shutil
+        for cmd in ["chromium", "chromium-browser", "google-chrome"]:
+            found = shutil.which(cmd)
+            if found:
+                return found
+        return ""
+
     def launch_browser():
         nonlocal ctx, page
         os.makedirs(BROWSER_DATA, exist_ok=True)
-        # Use system Chromium on Railway/Docker, or Playwright bundled on local
-        exec_path = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH", "")
-        kw = {}
-        if exec_path and os.path.exists(exec_path):
-            kw["executable_path"] = exec_path
+        exec_path = find_chromium()
+        if exec_path:
             slog(f"Menggunakan system Chromium: {exec_path}", "BROWSER")
-        ctx = pw.chromium.launch_persistent_context(
-            BROWSER_DATA, headless=True, args=bargs,
-            viewport=LIVE_VIEWPORT, user_agent=ua, locale="id-ID", **kw)
+            # Set env so Playwright picks it up
+            os.environ["PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"] = exec_path
+        else:
+            slog("Tidak menemukan system Chromium, gunakan Playwright bundled", "WARNING")
+        try:
+            ctx = pw.chromium.launch_persistent_context(
+                BROWSER_DATA, headless=True, args=bargs,
+                executable_path=exec_path if exec_path else None,
+                viewport=LIVE_VIEWPORT, user_agent=ua, locale="id-ID")
+        except Exception as e:
+            slog(f"Launch error (exec_path): {str(e)[:80]}", "ERROR")
+            # Fallback: try without executable_path
+            slog("Mencoba fallback tanpa executable_path...", "WARNING")
+            ctx = pw.chromium.launch_persistent_context(
+                BROWSER_DATA, headless=True, args=bargs,
+                viewport=LIVE_VIEWPORT, user_agent=ua, locale="id-ID")
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         _page_ref = page
 

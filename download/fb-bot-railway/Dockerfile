@@ -26,6 +26,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
+# Verify Chromium is installed
+RUN which chromium && chromium --version || echo "WARNING: chromium not found!"
+
 WORKDIR /app
 
 COPY requirements.txt .
