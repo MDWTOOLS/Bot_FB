@@ -1,0 +1,68 @@
+# Pterodactyl Panel - Railway Deployment
+# ====================================
+#
+# Images:
+# - ghcr.io/pterodactyl/panel:latest
+# - bitnami/redis:latest
+# - mysql:9
+#
+# ====================================
+
+services:
+  panel:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      - APP_URL=${APP_URL:-http://localhost:8080}
+      - APP_KEY=${APP_KEY:-}
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=${DB_DATABASE:-pterodactyl}
+      - DB_USERNAME=${DB_USERNAME:-pterodactyl}
+      - DB_PASSWORD=${DB_PASSWORD:-pterodactyl123}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CACHE_DRIVER=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:9
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123}
+      - MYSQL_DATABASE=${DB_DATABASE:-pterodactyl}
+      - MYSQL_USER=${DB_USERNAME:-pterodactyl}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-pterodactyl123}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: bitnami/redis:latest
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

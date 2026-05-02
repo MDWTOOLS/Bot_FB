@@ -1,0 +1,15 @@
+# Railway Config - Create 3 services manually
+# ====================================
+# This file is for reference. Railway doesn't
+# auto-create services from this config.
+# Follow the setup guide below.
+# ====================================
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": "Dockerfile",
+  "deploy": {
+    "startCommand": "bash /entrypoint.sh",
+    "restartPolicyType": "on_failure",
+    "restartPolicyMaxRetries": 10
+  }
+}
