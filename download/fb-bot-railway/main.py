@@ -18,7 +18,7 @@ Bot Facebook v15 - Railway Deployment
 
 import json, time, random, os, re, sys, datetime, threading, traceback, queue as _queue
 import logging
-from flask import Flask, render_template_string, request, jsonify, Response
+from flask import Flask, render_template_string, request, jsonify, Response, send_file
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 # ===========================================================
@@ -938,7 +938,13 @@ def playwright_thread_func():
 # ===========================================================
 HTML = """<!DOCTYPE html>
 <html lang="id"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bot FB">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>Bot Facebook</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -1153,6 +1159,7 @@ function rcScroll(d){api("/api/rc/scroll","POST",{direction:d})}
 function toggleMenu(){var m=document.getElementById("gearMenu");m.classList.toggle("open")}document.addEventListener("click",function(e){var w=document.querySelector(".gear-wrap");if(w&&!w.contains(e.target)){document.getElementById("gearMenu").classList.remove("open")}});
 document.getElementById("rcInput").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();rcSend()}});
 (function(){var sE=document.getElementById("sseBadge");var es=null;var r=0;function c(){if(es){es.close();es=null}es=new EventSource("/api/stream");es.onopen=function(){r=0;sE.textContent="SSE Live";sE.className="sse-badge sse-on"};es.onmessage=function(e){try{update(JSON.parse(e.data))}catch(er){}};es.onerror=function(){sE.textContent="...";sE.className="sse-badge sse-off";es.close();es=null;r++;setTimeout(c,Math.min(r*2,10)*1000)}}api("/api/status").then(function(d){update(d);c()});window.addEventListener("beforeunload",function(){if(es)es.close()})})();
+if("serviceWorker" in navigator){navigator.serviceWorker.register("/sw.js").catch(function(){});}
 </script></body></html>"""
 
 # ===========================================================
@@ -1160,7 +1167,13 @@ document.getElementById("rcInput").addEventListener("keydown",function(e){if(e.k
 # ===========================================================
 HTML_NOTES = """<!DOCTYPE html>
 <html lang="id"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bot FB">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>Note Activations - Bot Facebook</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -1294,7 +1307,13 @@ setInterval(loadData,5000);
 # ===========================================================
 HTML_COMMENTS = """<!DOCTYPE html>
 <html lang="id"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bot FB">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>Manage Comments - Bot Facebook</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -1428,7 +1447,13 @@ loadComments();
 # ===========================================================
 HTML_SETTINGS = """<!DOCTYPE html>
 <html lang="id"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bot FB">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>Settings - Bot Facebook</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -1543,6 +1568,41 @@ app = Flask(__name__)
 
 log = logging.getLogger("werkzeug")
 log.setLevel(logging.WARNING)
+
+# ===========================================================
+#  PWA ROUTES (manifest, service worker, icons)
+# ===========================================================
+@app.route("/manifest.json")
+def manifest():
+    return jsonify({
+        "name": "Bot Facebook",
+        "short_name": "Bot FB",
+        "description": "Facebook Auto Comment Bot by MDW",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#0d1117",
+        "theme_color": "#0d1117",
+        "orientation": "portrait",
+        "icons": [
+            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"}
+        ]
+    })
+
+@app.route("/sw.js")
+def service_worker():
+    return Response("""const CACHE='botfb-v1';
+self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['/','/notes','/comments','/settings','/icon-192.png','/icon-512.png'])))});
+self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{if(res.ok){const cl=res.clone();caches.open(CACHE).then(c=>c.put(e.request,cl))}return res}).catch(()=>caches.match('/'))))});
+""", mimetype="application/javascript")
+
+@app.route("/icon-192.png")
+def icon_192():
+    return send_file(os.path.join(APP_DIR, "icon-192.png"), mimetype="image/png")
+
+@app.route("/icon-512.png")
+def icon_512():
+    return send_file(os.path.join(APP_DIR, "icon-512.png"), mimetype="image/png")
 
 @app.route("/")
 def index():
