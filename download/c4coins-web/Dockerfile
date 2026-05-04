@@ -5,16 +5,17 @@ WORKDIR /app
 # Install system deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
-    libgl1-mesa-glx \
+    libgl1 \
+    libglx-mesa0 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 
 # Copy app
-COPY app.py index.html ./
+COPY app.py ./
 
 # Data directory
 ENV DATA_DIR=/app/data
